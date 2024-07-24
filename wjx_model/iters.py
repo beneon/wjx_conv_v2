@@ -1,16 +1,20 @@
+import os
+from typing import List
 import pandas as pd
 from collections import OrderedDict
-from wjx_model.answer_field_parser import AnswerField
+from wjx_model.elems import AttachmentFileEntry, AnswerField
+
 
 class DataFileIter:
     def __init__(self,df:pd.DataFrame,EntryClass):
         self.df = df
         self.EntryClass=EntryClass
+        self.entries = self.iter_to_list()
 
     def __len__(self):
         return self.df.shape[0]
 
-    def __getitem__(self, item:int):
+    def _gen_entry(self,item:int):
         if item<self.__len__():
             row_ele: pd.Series = self.df.iloc[item, :]
             row_ele_dict = OrderedDict(row_ele.to_dict())
@@ -18,8 +22,14 @@ class DataFileIter:
         else:
             raise IndexError
 
-    def find_index_of_item_with_attr_val(self,attr_name,attr_val):
-        candidate_list = [i for i,e in enumerate(self) if getattr(e,attr_name)==attr_val]
+    def __getitem__(self, item:int):
+        if 0<=item<self.__len__():
+            return self.entries[item]
+        else:
+            raise IndexError
+
+    def find_index_of_item_with_attr_val(self,attr_name,attr_val:AnswerField):
+        candidate_list = [i for i,e in enumerate(self) if getattr(e,attr_name)==attr_val.content]
         if len(candidate_list)==1:
             return candidate_list[0]
         elif len(candidate_list)==0:
@@ -30,8 +40,16 @@ class DataFileIter:
 
     def iter_to_list(self):
         # 注意，getitem每次获取一个entry的时候，会**重新**init这个东西，这个bug还真是够隐蔽的。
-        return [e for e in self]
+        return [self._gen_entry(i) for i in range(self.__len__())]
 
+class StudentInfoIter(DataFileIter):
+    def __init__(self,df:pd.DataFrame):
+        super().__init__(df,StudentInfo)
+        
+
+class AnswerEntryIter(DataFileIter):
+    def __init__(self,df:pd.DataFrame):
+        super().__init__(df,AnswerEntry)
 
 
 class EntryBase:
@@ -62,7 +80,6 @@ class EntryBase:
 
 
 
-
 class StudentInfo(EntryBase):
     def __init__(self,row_ele_dict:dict):
         super().__init__(row_ele_dict)
@@ -88,11 +105,11 @@ class AnswerEntry(EntryBase):
         row_ele_dict = {k: AnswerField(k, v) for k, v in row_ele_dict.items()}
         super().__init__(row_ele_dict)
         self.update_alias_dict(
-            ['基本信息：—姓名：','1、姓名','姓名'],
+            ['基本信息：—姓名：','1、姓名','姓名','您的姓名','1、您的姓名：'],
             'student_name'
         )
         self.update_alias_dict(
-            ['学号','2、学号','1、学号:'],
+            ['学号','2、学号：','1、学号:','2、学号'],
             'student_id'
         )
         self.set_attr_via_internal_name('student_name')
@@ -110,12 +127,14 @@ class AnswerEntry(EntryBase):
     def user_id(self):
         if '用户ID' in self.row_ele_dict.keys():
             return self.row_ele_dict['用户ID']
+        elif hasattr(self,'student_name'):
+            return self.student_name
         else:
             raise Exception('row ele dict 不包含 用户ID 一项')
 
-    def get_entry_value_via_question_id(self,item):
+    def get_ans_field_via_question_id(self, item) -> AnswerField:
         """
-        注：questions titles 只包含作答的内容。
+        注：questions titles 只包含作答的内容。不包括诸如提交时间等非作答内容
         :param item: 一列所在的顺序id
         :return: 对应的答案值
         """
@@ -148,3 +167,30 @@ class AnswerEntry(EntryBase):
             raise Exception('问卷中不包含关键项：**来自IP**或**总分**')
         _q_starts_at = keys_list.index(index_str)+1
         return keys_list[_q_starts_at:]
+
+
+class AttachmentParser:
+    def __init__(self,attachment_path):
+        self.wd = attachment_path
+        assert os.path.exists(self.wd), f'{attachment_path} do not exists'
+        self._file_list = os.listdir(self.wd)
+
+    def __len__(self):
+        return len(self._file_list)
+
+    def __getitem__(self, item):
+        if 0<=item<self.__len__():
+            return AttachmentFileEntry(os.path.join(self.wd,self._file_list[item]))
+        else:
+            raise IndexError
+
+    def _filter_attachment_entries(self,filter_str:AnswerField,match_attr_name:str):
+        return [self.__getitem__(i) for i in range(len(self)) if getattr(self.__getitem__(i),match_attr_name)==filter_str]
+
+    def get_attachments_via_serial_num(self,serial_num:AnswerField):
+        if isinstance(serial_num.content,(int,float)):
+            serial_num_str = str(serial_num.content)
+        return self._filter_attachment_entries(serial_num_str,'serial_num')
+
+    def get_attachments_via_user_id(self,user_id:str):
+        return self._filter_attachment_entries(user_id.content,'user_id')

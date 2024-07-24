@@ -8,8 +8,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.enums import TA_LEFT,TA_CENTER,TA_RIGHT,TA_JUSTIFY
 
-
-from wjx_model.type_dict_coll import ReportData
+from reportlab_port.types import ReportData
+from reportlab_port.content_proc import QuestionProc,RCElementProc
 
 from typing import List, TypeVar
 
@@ -22,10 +22,8 @@ styles = getSampleStyleSheet()
 styles.add(ParagraphStyle(fontName='SimSun', name='header_song',alignment=TA_RIGHT, fontSize=10))
 styles.add(ParagraphStyle(fontName='SimHei',name='header_hei',fontSize=12,alignment=TA_LEFT))
 styles.add(ParagraphStyle(fontName='SimHei',name='hei_center',fontSize=12,alignment=TA_CENTER))
-styles.add(ParagraphStyle(fontName='SimSun',name='content_justify',fontSize=12,alignment=TA_LEFT,firstLineIndent=2))
-
-
-
+styles.add(ParagraphStyle(fontName='SimSun',name='content_left',fontSize=12,alignment=TA_LEFT,firstLineIndent=2))
+styles.add(ParagraphStyle(fontName='SimHei',name='maintext_left',fontSize=12,alignment=TA_LEFT,firstLineIndent=2))
 
 
 class ExpReport:
@@ -47,19 +45,25 @@ class ExpReport:
         canv.restoreState()
 
     def _update_story_list(self):
-        if isinstance(self.report_data['report_content'],str):
-            paragraph_txts = self.report_data['report_content'].split('\n')
+        if isinstance(self.report_data.report_content,str):
+            paragraph_txts = self.report_data.report_content.split('\n')
             for p_txt in paragraph_txts:
-                self.story.append(Paragraph(p_txt,self.styles['content_justify']))
-        elif isinstance(self.report_data['report_content'],list):
-            pass
+                self.story.append(Paragraph(p_txt,self.styles['content_left']))
+        elif isinstance(self.report_data.report_content,list):
+            question_proc_list = [QuestionProc(rce_list,self.styles) for rce_list in self.report_data.report_content]
+            rst_list = []
+            for question_proc_flowable in question_proc_list:
+                rst_list = rst_list+question_proc_flowable.get_combined_flowables()
+            for f in rst_list:
+                self.story.append(f)
+
 
     def _create_header(self, canv:canvas.Canvas, doc)->None:
-        left_header = Paragraph(f"{self.report_data['curriculum_title']}实验报告", styles['header_hei'])
+        left_header = Paragraph(f"{self.report_data.curriculum_title}实验报告", styles['header_hei'])
         w,h = left_header.wrap(doc.width,doc.topMargin)
         left_header.drawOn(canv, doc.leftMargin, doc.height + doc.bottomMargin + doc.topMargin*2/3 - h)
 
-        right_header = Paragraph(f"姓名：{self.report_data['student_name']} 学号：{self.report_data['student_id']}班级：{self.report_data['student_class']}<br/>", styles['header_song'])
+        right_header = Paragraph(f"姓名：{self.report_data.student_name} 学号：{self.report_data.student_id}班级：{self.report_data.student_class}<br/>", styles['header_song'])
         wr,hr = right_header.wrap(doc.width,doc.topMargin-h)
         right_header.drawOn(canv, doc.leftMargin, doc.height + doc.bottomMargin + doc.topMargin*2/3 - h - hr)
 

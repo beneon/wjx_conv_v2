@@ -1,4 +1,35 @@
 # 问卷星后处理工具 v2.0
+
+
+## 目的
+
+在给学生布置作业的时候，问卷星是非常好用的一个工具。但是在批改作业的时候，问卷星是非常让人头疼的东西。毕竟没有人愿意对着excel那一堆文字去看。虽然问卷星自带了生成报告的功能，但是这功能需要付费。可既然我能下载（1）答卷数据，（2）问卷题目模板，以及（3）附件，况且附件保存年限非常短，肯定也要本地保存。那为什么不干脆用python做一个工具把这些数据生成本地能看的pdf呢？
+
+### 这一版和v1的区别
+
+[第一版](https://github.com/beneon/wjxConv)当时主要想解决的问题就是在excel里做一个指向问卷附件的文件链接。当时最早尝试使用python的urllib解析答卷数据中的链接文件，用这个链接文件匹配解压以后的附件。但是随着问卷星的进化，这一招不好用了。现在问卷星使用一套自己的命名方式，附件的文件名一般由答案序号、答案标示（一般默认使用姓名）、问题的前15个字符以及上传文件的文件名组成。之前的版本虽然也根据新的命名方式尝试做过更新，但是当时的屎山代码我已经无力维护。所以另起炉灶会更好一点。
+
+## 组成
+
+代码由wjx_model，wjx_view,以及充当template角色的reportlab_port三个大块组成。
+
+### wjx_model
+
+负责读取答题数据、学生信息文件和解析附件文件。
+
+包含：
+
+1. Curriculum类：读取解析整个课程的yaml config文件，按照课程内容生成对应的session类
+2. Session类：一次实验或者一次作业作为一个session，负责读取答卷信息和解析附件，并且在两者之间交叉比对，更新answer entry中对应文件上传题的内容
+3. SessionData类：由session生成的数据类，负责读取学生信息，和答卷信息中学生信息交叉比对，更新answer entry身份信息。实现了len和getitem方法，返回更新好的answer entry
+4. AnswerEntry类：代表一个答卷数据，也实现了len和getitem方法，getitem返回其中答卷中的一列，以AnswerField表示
+5. AnswerField类：AnswerEntry的下一级，具体表示一列数据
+6. AttachmentParser类：表示当前session下的所有附件
+7. AttachmentFileEntry类：表示一个附件文件
+
+这一块代码基本上由3个层级组成，最顶层的是__init__下面的Curriculum和Session，Session下辖的AnswerEntry和AttachmentParser位于iters，而最下级则位于elems代码中
+
+
 ## 2024-07-08 学习记录2
 
 现在可以：
